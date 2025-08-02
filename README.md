@@ -92,6 +92,6 @@ Fuel burns are treated as **instantaneous delta-v impulses** at the start of eac
 
 ## 📁 License
 
-MIT License.
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
 
