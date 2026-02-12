@@ -2,6 +2,20 @@ using System;
 
 static class ColoredConsole
 {
+    // Initialize console settings (called from program startup)
+    public static void Init()
+    {
+        try
+        {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Console.InputEncoding = System.Text.Encoding.UTF8;
+        }
+        catch
+        {
+            // ignore if encoding cannot be changed in this environment
+        }
+    }
+
     public static void Header(string text)
     {
         var prev = Console.ForegroundColor;
@@ -21,7 +35,7 @@ static class ColoredConsole
         var prev = Console.ForegroundColor;
         try
         {
-            Console.ForegroundColor = ConsoleColor.White;
+            Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.WriteLine(text);
         }
         finally
@@ -36,6 +50,21 @@ static class ColoredConsole
         try
         {
             Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine(text);
+        }
+        finally
+        {
+            Console.ForegroundColor = prev;
+        }
+    }
+
+    // Telemetry uses bright green for step-by-step numeric output
+    public static void Telemetry(string text)
+    {
+        var prev = Console.ForegroundColor;
+        try
+        {
+            Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(text);
         }
         finally
@@ -77,7 +106,7 @@ static class ColoredConsole
         var prev = Console.ForegroundColor;
         try
         {
-            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.ForegroundColor = ConsoleColor.Cyan;
             Console.Write(text);
         }
         finally
