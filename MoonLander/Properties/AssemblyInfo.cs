@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("M&R Research Team")]
 [assembly: AssemblyProduct("Vis Viva Moon Lander")]
-[assembly: AssemblyCopyright("Copyright © M&R Research 2025")]
+[assembly: AssemblyCopyright("© M&R Research Team 2025–2026")]
 [assembly: AssemblyTrademark("Vis Viva")]
 [assembly: AssemblyCulture("")]
 
@@ -29,5 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]

@@ -35,7 +35,7 @@ static class ColoredConsole
         var prev = Console.ForegroundColor;
         try
         {
-            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
             Console.WriteLine(text);
         }
         finally
