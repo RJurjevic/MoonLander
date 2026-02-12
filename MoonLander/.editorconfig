@@ -1,0 +1,4 @@
+[*.cs]
+spelling_languages = en-gb
+spelling_checkable_types = identifiers,comments,strings
+spelling_error_severity = warning
