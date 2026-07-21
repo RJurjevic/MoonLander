@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 
 class LanderConfig
 {
@@ -9,17 +10,24 @@ class LanderConfig
     public double ExhaustVelocity { get; set; }
     public double Gravity { get; set; }
     public double TimeStep { get; set; }
+    public double MaxBurnRateKgPerSec { get; set; } // kg/s, engine's max propellant flow rate
 }
 
 class LanderState
 {
+    readonly LanderConfig cfg;
+
     public double Altitude { get; set; }
     public double Velocity { get; set; }
     public double FuelMass { get; set; }
     public double TotalInteractionEnergyDelivered { get; set; }
 
-    public LanderState(LanderConfig cfg)
+    public double CurrentMass => cfg.DryMass + FuelMass;
+    public double MechanicalEnergy => CurrentMass * (0.5 * Velocity * Velocity + Math.Abs(cfg.Gravity) * Altitude);
+
+    public LanderState(LanderConfig config)
     {
+        cfg = config;
         Altitude = cfg.InitialAltitude;
         Velocity = cfg.InitialVelocity;
         FuelMass = cfg.LanderMass - cfg.DryMass;
@@ -42,7 +50,8 @@ class MoonLanderSimulation
 
     public void Run()
     {
-        ColoredConsole.Header("=== Vis Viva Moon Lander ===");
+        var version = Assembly.GetExecutingAssembly().GetName().Version;
+        ColoredConsole.Header($"=== Vis Viva Moon Lander v{version} ===");
         ColoredConsole.Info("Try to land softly by applying thrust as fuel mass (kg).");
 
         while (state.Altitude > 0)
@@ -64,6 +73,8 @@ class MoonLanderSimulation
         ColoredConsole.Telemetry($"\nAltitude: {s.Altitude:F2} m");
         ColoredConsole.Telemetry($"Velocity: {s.Velocity:F2} m/s");
         ColoredConsole.Telemetry($"Fuel: {s.FuelMass:F2} kg");
+
+        ColoredConsole.Info($"Mechanical energy remaining: {s.MechanicalEnergy:E10} J");
     }
 
     double ReadBurnKg(LanderState s)
@@ -75,17 +86,21 @@ class MoonLanderSimulation
         if (string.IsNullOrWhiteSpace(input))
         {
             ColoredConsole.Warn("Burn skipped.");
-            burnKg = 0; // Default to 0 fuel burned
+            burnKg = 0;
         }
         else if (!double.TryParse(input, out burnKg))
         {
             ColoredConsole.Error("Invalid input. Burn skipped.");
             burnKg = 0;
         }
-        if (burnKg > s.FuelMass)
+        else
         {
-            ColoredConsole.Warn("Not enough fuel. Burn skipped.");
-            burnKg = 0;
+            double maxThisStep = Math.Min(cfg.MaxBurnRateKgPerSec * cfg.TimeStep, s.FuelMass);
+            if (burnKg > maxThisStep)
+            {
+                ColoredConsole.Warn($"Requested {burnKg:F2} kg exceeds what's deliverable this step. Capped to {maxThisStep:F2} kg.");
+                burnKg = maxThisStep;
+            }
         }
 
         ColoredConsole.Telemetry($"Burned: {burnKg:F2} kg");

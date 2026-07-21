@@ -14,7 +14,8 @@ class MoonLander
             DryMass = 800.0,
             ExhaustVelocity = 2500.0,
             Gravity = -1.62,
-            TimeStep = 1.0
+            TimeStep = 1.0,
+            MaxBurnRateKgPerSec = 20.0   // order of magnitude of Apollo LM descent engine flow rate
         };
 
         if (cfg.InitialVelocity > 0)
