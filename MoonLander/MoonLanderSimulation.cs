@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Collections.Generic;
 
 class LanderConfig
 {
@@ -60,9 +61,7 @@ class MoonLanderSimulation
 
             double burnKg = ReadBurnKg(state);
 
-            ApplyBurnAndEnergy(burnKg);
-
-            StepOneSecondAndCorrectImpact();
+            AdvanceStep(burnKg);
         }
 
         PrintLandingReport();
@@ -88,7 +87,7 @@ class MoonLanderSimulation
             ColoredConsole.Warn("Burn skipped.");
             burnKg = 0;
         }
-        else if (!double.TryParse(input, out burnKg))
+        else if (!double.TryParse(input, out burnKg) || double.IsNaN(burnKg) || double.IsInfinity(burnKg) || burnKg < 0)
         {
             ColoredConsole.Error("Invalid input. Burn skipped.");
             burnKg = 0;
@@ -103,65 +102,116 @@ class MoonLanderSimulation
             }
         }
 
-        ColoredConsole.Telemetry($"Burned: {burnKg:F2} kg");
+        ColoredConsole.Telemetry($"Scheduled burn: {burnKg:F2} kg");
         return burnKg;
     }
 
-    void ApplyBurnAndEnergy(double burnKg)
+    // Upward is positive. The requested fuel is spread uniformly over the full step.
+    internal void AdvanceStep(double burnKg)
     {
-        double initialMass = cfg.DryMass + state.FuelMass;
-        state.FuelMass -= burnKg;
-        double finalMass = cfg.DryMass + state.FuelMass;
-        double deltaV = burnKg > 0 ? cfg.ExhaustVelocity * Math.Log(initialMass / finalMass) : 0;
+        double duration = cfg.TimeStep;
+        double initialMass = state.CurrentMass;
+        double flow = Math.Min(Math.Max(0, burnKg),
+            Math.Min(state.FuelMass, cfg.MaxBurnRateKgPerSec * duration)) / duration;
+        double altitude = state.Altitude;
+        double velocity = state.Velocity;
+        Func<double, double> speed = t => velocity + cfg.Gravity * t
+            + (flow > 0 ? cfg.ExhaustVelocity * LogMassRatio(flow * t / initialMass) : 0);
+        Func<double, double> height = t => altitude + velocity * t + 0.5 * cfg.Gravity * t * t
+            + (flow > 0 ? cfg.ExhaustVelocity * BurnDistance(t, flow / initialMass) : 0);
 
-        if (burnKg > 0)
+        // Acceleration increases during a burn. Splitting at its zero and then
+        // at velocity zeros gives monotonic height intervals, including hidden contact.
+        var velocityIntervals = new List<double> { 0 };
+        if (flow > 0 && cfg.Gravity < 0)
         {
-            double interactionEnergy = 0.5 * (finalMass * burnKg) / (finalMass + burnKg) * cfg.ExhaustVelocity * cfg.ExhaustVelocity;
+            double turn = initialMass / flow + cfg.ExhaustVelocity / cfg.Gravity;
+            if (turn > 0 && turn < duration) velocityIntervals.Add(turn);
+        }
+        velocityIntervals.Add(duration);
+        var heightIntervals = new List<double> { 0 };
+        for (int i = 1; i < velocityIntervals.Count; i++)
+        {
+            double left = velocityIntervals[i - 1], right = velocityIntervals[i];
+            if (speed(left) * speed(right) < 0)
+                heightIntervals.Add(FindZero(speed, left, right));
+            heightIntervals.Add(right);
+        }
+
+        double elapsed = duration;
+        bool landed = altitude <= 0;
+        if (landed) elapsed = 0;
+        for (int i = 1; !landed && i < heightIntervals.Count; i++)
+        {
+            double right = heightIntervals[i];
+            if (height(right) <= 0)
+            {
+                elapsed = FindZero(height, heightIntervals[i - 1], right);
+                landed = true;
+            }
+        }
+
+        double consumed = flow * elapsed;
+        state.Altitude = landed ? 0 : height(elapsed);
+        state.Velocity = speed(elapsed);
+        state.FuelMass = Math.Max(0, state.FuelMass - consumed);
+        ColoredConsole.Telemetry($"Burned: {consumed:F2} kg");
+
+        // Preserve the existing Vis Viva diagnostics for later discussion.
+        double finalMass = state.CurrentMass;
+        if (consumed > 0)
+        {
+            double interactionEnergy = 0.5 * (finalMass * consumed) / initialMass
+                * cfg.ExhaustVelocity * cfg.ExhaustVelocity;
             state.TotalInteractionEnergyDelivered += interactionEnergy;
             ColoredConsole.Info($"Interaction Energy this burn (Vis Viva): {interactionEnergy:E10} J");
         }
-
-        double currentMass = cfg.DryMass + state.FuelMass;
-        double remainingFuelInteractionEnergy = 0.5 * (currentMass * state.FuelMass) / (currentMass + state.FuelMass) * cfg.ExhaustVelocity * cfg.ExhaustVelocity;
+        double remainingFuelInteractionEnergy = 0.5 * (finalMass * state.FuelMass)
+            / (finalMass + state.FuelMass) * cfg.ExhaustVelocity * cfg.ExhaustVelocity;
         ColoredConsole.Info($"Remaining Fuel Interaction Energy: {remainingFuelInteractionEnergy:E10} J");
-
-        // Apply instantaneous delta-v
-        state.Velocity += deltaV;
     }
 
-    void StepOneSecondAndCorrectImpact()
+    static double FindZero(Func<double, double> value, double left, double right)
     {
-        double prevAltitude = state.Altitude;
-        double prevVelocity = state.Velocity;
-
-        state.Altitude += state.Velocity * cfg.TimeStep + 0.5 * cfg.Gravity * cfg.TimeStep * cfg.TimeStep;
-        state.Velocity += cfg.Gravity * cfg.TimeStep;
-
-        if (state.Altitude < 0)
+        if (value(left) == 0) return left;
+        if (value(right) == 0) return right;
+        double leftValue = value(left);
+        for (int i = 0; i < 100; i++)
         {
-            CorrectImpactIfNeeded(prevAltitude, prevVelocity);
+            double middle = left + (right - left) / 2;
+            if (middle == left || middle == right) break;
+            double middleValue = value(middle);
+            if (middleValue == 0) return middle;
+            if ((middleValue > 0) == (leftValue > 0))
+            {
+                left = middle;
+                leftValue = middleValue;
+            }
+            else right = middle;
         }
-
-        if (state.Altitude < 0) state.Altitude = 0;
+        return left + (right - left) / 2;
     }
 
-    void CorrectImpactIfNeeded(double prevAltitude, double prevVelocity)
+    static double LogMassRatio(double fraction)
     {
-        double a = 0.5 * cfg.Gravity;
-        double b = prevVelocity;
-        double c = prevAltitude;
+        if (fraction >= 0.001) return -Math.Log(1 - fraction);
+        double sum = 0, power = fraction;
+        for (int n = 1; n <= 12; n++, power *= fraction) sum += power / n;
+        return sum;
+    }
 
-        double discriminant = b * b - 4 * a * c;
-
-        if (discriminant >= 0)
+    static double BurnDistance(double time, double fractionalFlow)
+    {
+        double fraction = fractionalFlow * time;
+        // Series avoids cancellation in t - (m/q - t) * log(m/(m-q*t)).
+        if (fraction < 0.001)
         {
-            double sqrtD = Math.Sqrt(discriminant);
-            double dtImpact = (-b - sqrtD) / (2 * a);
-            double correctedImpactVelocity = prevVelocity + cfg.Gravity * dtImpact;
-
-            state.Velocity = correctedImpactVelocity;
-            state.Altitude = 0;
+            double sum = 0, power = fraction;
+            for (int n = 1; n <= 12; n++, power *= fraction)
+                sum += power / (n * (n + 1));
+            return time * sum;
         }
+        return time - (1 / fractionalFlow - time) * LogMassRatio(fraction);
     }
 
     void PrintLandingReport()
