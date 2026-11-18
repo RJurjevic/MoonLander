@@ -157,17 +157,17 @@ class MoonLanderSimulation
         state.FuelMass = Math.Max(0, state.FuelMass - consumed);
         ColoredConsole.Telemetry($"Burned: {consumed:F2} kg");
 
-        // Preserve the existing Vis Viva diagnostics for later discussion.
-        double finalMass = state.CurrentMass;
+        // Ideal continuous-exhaust energy budget: sum infinitesimal action-reaction
+        // interactions at constant relative exhaust velocity (0.5 * fuel mass * ve^2).
         if (consumed > 0)
         {
-            double interactionEnergy = 0.5 * (finalMass * consumed) / initialMass
+            double interactionEnergy = 0.5 * consumed
                 * cfg.ExhaustVelocity * cfg.ExhaustVelocity;
             state.TotalInteractionEnergyDelivered += interactionEnergy;
             ColoredConsole.Info($"Interaction Energy this burn (Vis Viva): {interactionEnergy:E10} J");
         }
-        double remainingFuelInteractionEnergy = 0.5 * (finalMass * state.FuelMass)
-            / (finalMass + state.FuelMass) * cfg.ExhaustVelocity * cfg.ExhaustVelocity;
+        double remainingFuelInteractionEnergy = 0.5 * state.FuelMass
+            * cfg.ExhaustVelocity * cfg.ExhaustVelocity;
         ColoredConsole.Info($"Remaining Fuel Interaction Energy: {remainingFuelInteractionEnergy:E10} J");
     }
 

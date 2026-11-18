@@ -9,8 +9,8 @@ $checks = [ordered]@{
         "SAFE landing."
         "Final velocity: -2.78 m/s"
         "Fuel: 174.00 kg"
-        "Total Interaction Energy Delivered: 7.9885204082E+007 J"
-        "Remaining Fuel Interaction Energy: 4.6133493031E+008 J"
+        "Total Interaction Energy Delivered: 8.1250000000E+007 J"
+        "Remaining Fuel Interaction Energy: 5.4375000000E+008 J"
     )
 
     "HiddenImpact.txt" = @(
